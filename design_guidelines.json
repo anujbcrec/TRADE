@@ -1,0 +1,105 @@
+{
+  "theme": "dark",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "design_context": "DASHBOARDS & ADMIN PANELS (Analytics, Admin, Data-Heavy)",
+  "emotional_tone": "Authority, clarity, high-performance, institutional, functional",
+  "colors": {
+    "background": "#000000",
+    "surface": "#0C0C0C",
+    "surface_hover": "#1A1A1A",
+    "border": "#222222",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#888888",
+    "text_tertiary": "#555555",
+    "primary": "#FFFFFF",
+    "primary_text": "#000000",
+    "buy_profit": "#00E676",
+    "buy_profit_bg": "rgba(0, 230, 118, 0.1)",
+    "sell_loss": "#FF3344",
+    "sell_loss_bg": "rgba(255, 51, 68, 0.1)",
+    "warning": "#FFB800",
+    "info": "#0066FF"
+  },
+  "typography": {
+    "font_families": {
+      "headings": "Chivo",
+      "body": "Inter",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-2xl tracking-tight font-semibold",
+      "h2": "text-xl tracking-tight font-medium",
+      "h3": "text-lg tracking-tight font-medium",
+      "h4": "text-base font-medium",
+      "body": "text-sm",
+      "small": "text-xs text-secondary",
+      "data_large": "font-mono text-2xl tracking-tighter",
+      "data_medium": "font-mono text-base tracking-tight",
+      "data_small": "font-mono text-xs uppercase tracking-wider"
+    },
+    "guidelines": "Do not use 'Inter' for headings. Use 'Chivo' for all standard text headings, and ALWAYS use 'JetBrains Mono' for tickers (e.g., BTC/USDT), prices, order sizes, PnL, and timestamps. Use tracking-tight for all numbers to make them compact."
+  },
+  "spacing_and_layout": {
+    "strategy": "THE CONTROL ROOM GRID",
+    "density": "Tight",
+    "container_padding": "p-2 sm:p-4",
+    "grid_gaps": "gap-px or gap-2",
+    "border_radius": "rounded-none",
+    "borders": "border border-[#222222]",
+    "rules": "Every pixel must be utilized. Use border-collapse patterns. Widgets should have 0px border-radius to emphasize the institutional/technical nature. Grid items stretch to match heights. Avoid large empty spaces; fill them with data density or subtle grid lines."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Hard background shifts (e.g., hover:bg-[#1A1A1A]) with 0ms transition. Instant feedback is critical for trading.",
+    "active_states": "Scale down slightly (scale-95) for buttons.",
+    "data_updates": "Price ticks should flash text color (green for up, red for down) and fade back to white/grey over 500ms.",
+    "animations": "Keep standard UI animations to an absolute minimum (duration-75 or duration-100). Focus on data visibility, not flair."
+  },
+  "surface_strategies": {
+    "primary": "GRID BORDERS (The 'Technical' Look). Expose the skeleton. Make the grid visible. Use sharp 1px borders everywhere. No shadows, no glassmorphism.",
+    "headers": "Solid black background with a hard bottom border (`border-b border-[#222222]`).",
+    "cards": "Flat background (`#0C0C0C`), 1px subtle border, sharp corners, no shadow."
+  },
+  "components": {
+    "charts": "Use Recharts or Shadcn charts with customized sharp tooltips, straight lines (no curve/monotone), and strict axis formatting using JetBrains Mono.",
+    "buttons": "Rectangular, sharp edges (rounded-none). Primary buttons are solid white with black text. Secondary buttons are transparent with 1px gray border and white text.",
+    "tables": "Dense. Padding py-2 px-3 per cell. Hover on row: `bg-[#1A1A1A]`. Strict right-alignment for all numerical columns.",
+    "inputs": "Sharp edges, dark background (`bg-black`), 1px border. Focus state: `border-white ring-0`. No soft halos.",
+    "tabs": "Underline style or solid block style. No rounded pills."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "installation": "yarn add @phosphor-icons/react",
+    "weight": "regular or bold for active states",
+    "usage": "Use consistently sized icons (16px or 20px). Don't overuse; rely on text and color for data."
+  },
+  "images": {
+    "logo": {
+      "url": "https://images.unsplash.com/photo-1649326995808-53a45888fde3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMG1pbmltYWxpc3QlMjBnZW9tZXRyeSUyMGxvZ28lMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzU1MzU3NDJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract minimalist geometry logo for the trading platform",
+      "placement": "Header top-left"
+    },
+    "avatar": {
+      "url": "https://images.unsplash.com/photo-1663454297176-f72459576d15?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwxfHxwcm9maWxlJTIwcGljdHVyZSUyMGFub255bW91cyUyMGRhcmslMjBtb2RlfGVufDB8fHx8MTc3NTUzNTc5NHww&ixlib=rb-4.1.0&q=85",
+      "description": "Avatar placeholder",
+      "placement": "Header right - user profile"
+    }
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure pure white text on black background for critical data. Dim text must remain readable (WCAG AA).",
+    "data_testid": "MANDATORY. Every button, input, tab, and row must have a `data-testid` (e.g., `data-testid=\"buy-btc-button\"`)."
+  },
+  "instructions_to_main_agent": [
+    "Build a dense, multi-panel trading dashboard imitating institutional tools (like Bloomberg Terminal or Binance Pro).",
+    "Ensure the layout covers the full screen height (h-screen, overflow-hidden on body) with internal scrolling panels.",
+    "Include standard trading panels: Real-time Chart (central/largest), Order Book (right or side), Order Entry/Strategy configuration (side or bottom), Positions/PnL (bottom), and Header (nav, balance, pairs).",
+    "Use a 'bento' grid or strict CSS grid for the layout. Ensure panels do not overlap.",
+    "Use JetBrains Mono for all numbers, prices, percentages, and timestamps.",
+    "Strictly follow the color codes for Profit (#00E676) and Loss (#FF3344). Never use default green/red.",
+    "Mock real-time data using setInterval in React effects to make prices tick, order book update, and PnL fluctuate.",
+    "Use pure CSS borders to divide panels (border-collapse style). Avoid gaps between panels if possible, or use 1px gaps with a black background to simulate borders.",
+    "Use Recharts for rendering the real-time Multi-Timeframe trading chart (line chart is acceptable if candlesticks are complex, but use sharp corners). Add advanced indicators placeholders like EMA, RSI, MACD.",
+    "Add UI toggles for Paper Trading mode, Manual Override, Webhooks, and AI Models.",
+    "Integrate Phosphor Icons as instructed.",
+    "Add the provided logo and avatar to the header."
+  ]
+}
