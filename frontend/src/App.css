@@ -1,34 +1,82 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.trading-dashboard {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: #000000;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.dashboard-header {
+  border-bottom: 1px solid #222222;
+  background: #000000;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr auto;
+  gap: 1px;
+  background: #000000;
+  height: 100%;
+  overflow: hidden;
 }
 
-.App-link {
-    color: #61dafb;
+.chart-panel {
+  grid-row: 1 / 2;
+  grid-column: 1 / 2;
+  border-right: 1px solid #222222;
+  border-bottom: 1px solid #222222;
+  background: #0C0C0C;
+  overflow: hidden;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.orderbook-panel {
+  grid-row: 1 / 2;
+  grid-column: 2 / 3;
+  border-bottom: 1px solid #222222;
+  background: #0C0C0C;
+  overflow-y: auto;
+}
+
+.bottom-panel {
+  grid-row: 2 / 3;
+  grid-column: 1 / 3;
+  background: #0C0C0C;
+  overflow: hidden;
+  max-height: 300px;
+}
+
+.price-tick-up {
+  animation: flash-green 500ms ease-out;
+}
+
+.price-tick-down {
+  animation: flash-red 500ms ease-out;
+}
+
+@keyframes flash-green {
+  0% { color: #00E676; }
+  100% { color: #FFFFFF; }
+}
+
+@keyframes flash-red {
+  0% { color: #FF3344; }
+  100% { color: #FFFFFF; }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #0C0C0C;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #222222;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #333333;
 }

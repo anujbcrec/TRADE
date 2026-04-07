@@ -1,0 +1,32 @@
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+class Settings(BaseSettings):
+    """Application configuration loaded from environment variables."""
+    
+    mongo_url: str = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+    db_name: str = os.environ.get('DB_NAME', 'test_database')
+    cors_origins: str = os.environ.get('CORS_ORIGINS', '*')
+    
+    emergent_llm_key: str = os.environ.get('EMERGENT_LLM_KEY', '')
+    binance_api_key: str = os.environ.get('BINANCE_API_KEY', '')
+    binance_api_secret: str = os.environ.get('BINANCE_API_SECRET', '')
+    binance_testnet_enabled: bool = os.environ.get('BINANCE_TESTNET_ENABLED', 'true').lower() == 'true'
+    
+    max_risk_per_trade: float = float(os.environ.get('MAX_RISK_PER_TRADE', '0.02'))
+    max_daily_loss: float = float(os.environ.get('MAX_DAILY_LOSS', '0.05'))
+    max_consecutive_losses: int = int(os.environ.get('MAX_CONSECUTIVE_LOSSES', '3'))
+    
+    class Config:
+        case_sensitive = False
+
+@lru_cache
+def get_settings() -> Settings:
+    """Return cached settings instance."""
+    return Settings()
