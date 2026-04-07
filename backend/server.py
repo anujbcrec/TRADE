@@ -14,6 +14,12 @@ from binance_client import BinanceMarketData
 from trading_engine import TradingEngine
 from risk_manager import RiskManager
 from ai_analyzer import AIAnalyzer
+from dhan_broker import DHANBroker
+from telegram_alerts import TelegramAlert
+from auto_trader import AutoTrader
+from tradingview_webhook import WebhookHandler, TradingViewSignal
+from backtesting_engine import BacktestingEngine
+from advanced_strategies import AdvancedStrategies
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,13 +33,18 @@ market_data_client = None
 trading_engine = None
 risk_manager = None
 ai_analyzer = None
+dhan_broker = None
+telegram_alerts = None
+auto_trader = None
+webhook_handler = None
+advanced_strategies = None
 mongo_client = None
 db = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global market_data_client, trading_engine, risk_manager, ai_analyzer, mongo_client, db
+    global market_data_client, trading_engine, risk_manager, ai_analyzer, dhan_broker, telegram_alerts, auto_trader, webhook_handler, advanced_strategies, mongo_client, db
     
     market_data_client = BinanceMarketData(testnet=settings.binance_testnet_enabled)
     trading_engine = TradingEngine()
@@ -46,6 +57,31 @@ async def lifespan(app: FastAPI):
     if settings.emergent_llm_key:
         ai_analyzer = AIAnalyzer(api_key=settings.emergent_llm_key)
     
+    # Initialize DHAN broker (with dummy credentials by default)
+    dhan_broker = DHANBroker(
+        client_id=settings.dhan_client_id,
+        access_token=settings.dhan_access_token
+    )
+    
+    # Initialize Telegram alerts (with dummy token by default)
+    telegram_alerts = TelegramAlert(
+        bot_token=settings.telegram_bot_token,
+        chat_id=settings.telegram_chat_id
+    )
+    
+    # Initialize auto-trader
+    auto_trader = AutoTrader(
+        enabled=settings.auto_trade_enabled,
+        min_confidence=settings.auto_trade_min_confidence,
+        max_position_size=settings.auto_trade_max_position_size
+    )
+    
+    # Initialize webhook handler
+    webhook_handler = WebhookHandler(secret=settings.webhook_secret)
+    
+    # Initialize advanced strategies (with dummy news API key by default)
+    advanced_strategies = AdvancedStrategies(news_api_key=settings.news_api_key)
+    
     mongo_client = AsyncIOMotorClient(settings.mongo_url)
     db = mongo_client[settings.db_name]
     
@@ -53,6 +89,9 @@ async def lifespan(app: FastAPI):
     yield
     
     await market_data_client.close()
+    await dhan_broker.close()
+    await telegram_alerts.close()
+    await advanced_strategies.close()
     mongo_client.close()
     logger.info("Application shutdown complete")
 
@@ -413,6 +452,233 @@ async def analyze_performance():
     except Exception as e:
         logger.error(f"Error in AI analysis: {e}")
         return {"analysis": "AI analysis failed", "error": str(e), "ai_enabled": False}
+
+
+# ========== DHAN BROKER ENDPOINTS ==========
+
+@api_router.get("/broker/dhan/holdings")
+async def get_dhan_holdings():
+    """Get DHAN holdings (Indian market positions)."""
+    try:
+        holdings = await dhan_broker.get_holdings()
+        return {"holdings": holdings}
+    except Exception as e:
+        logger.error(f"Error fetching DHAN holdings: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/broker/dhan/positions")
+async def get_dhan_positions():
+    """Get DHAN positions."""
+    try:
+        positions = await dhan_broker.get_positions()
+        return {"positions": positions}
+    except Exception as e:
+        logger.error(f"Error fetching DHAN positions: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/broker/dhan/funds")
+async def get_dhan_funds():
+    """Get DHAN account funds."""
+    try:
+        funds = await dhan_broker.get_funds()
+        return funds
+    except Exception as e:
+        logger.error(f"Error fetching DHAN funds: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ========== AUTO-TRADING ENDPOINTS ==========
+
+@api_router.get("/auto-trade/status")
+async def get_auto_trade_status():
+    """Get auto-trading status and configuration."""
+    return auto_trader.get_status()
+
+
+@api_router.post("/auto-trade/toggle")
+async def toggle_auto_trade(enabled: bool):
+    """Enable/disable auto-trading."""
+    auto_trader.enabled = enabled
+    status = "enabled" if enabled else "disabled"
+    
+    await telegram_alerts.send_message(
+        f"🤖 Auto-trading has been {status.upper()}"
+    )
+    
+    return {"auto_trade_enabled": enabled, "message": f"Auto-trading {status}"}
+
+
+# ========== TRADINGVIEW WEBHOOK ENDPOINT ==========
+
+@api_router.post("/webhook/tradingview")
+async def tradingview_webhook(signal: TradingViewSignal):
+    """
+    Receive trading signals from TradingView webhooks.
+    
+    Webhook URL: https://your-app.emergent.host/api/webhook/tradingview
+    """
+    try:
+        # Validate signal
+        validation = webhook_handler.validate_signal(signal)
+        
+        if not validation["valid"]:
+            webhook_handler.record_signal(signal, "REJECTED")
+            raise HTTPException(status_code=400, detail=validation["reason"])
+        
+        # Process signal
+        processed_signal = webhook_handler.process_signal(signal)
+        
+        # Send Telegram alert
+        await telegram_alerts.send_signal_alert(
+            symbol=signal.symbol,
+            signal=signal.action,
+            confidence=100,
+            indicators={"source": "TradingView", "strategy": signal.strategy}
+        )
+        
+        # Record signal
+        webhook_handler.record_signal(signal, "RECEIVED")
+        
+        logger.info(f"TradingView signal received: {signal.action} {signal.symbol}")
+        
+        return {
+            "status": "success",
+            "message": "Signal received and processed",
+            "signal": processed_signal
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Webhook processing error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/webhook/history")
+async def get_webhook_history(limit: int = 50):
+    """Get webhook signal history."""
+    history = webhook_handler.get_signal_history(limit)
+    return {"signals": history, "count": len(history)}
+
+
+# ========== BACKTESTING ENDPOINTS ==========
+
+@api_router.post("/backtest/run")
+async def run_backtest(
+    symbol: str,
+    interval: str = "1h",
+    limit: int = 500,
+    initial_capital: float = 10000.0
+):
+    """
+    Run backtest on historical data.
+    """
+    try:
+        # Fetch historical data
+        klines = await market_data_client.get_klines(symbol, interval, limit)
+        
+        if len(klines) < 100:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data. Need at least 100 candles, got {len(klines)}"
+            )
+        
+        # Initialize backtest engine
+        backtest_engine = BacktestingEngine(initial_capital=initial_capital)
+        
+        # Run backtest
+        result = await backtest_engine.run_backtest(
+            klines, trading_engine, risk_manager, interval
+        )
+        
+        # Return results
+        return {
+            "symbol": symbol,
+            "interval": interval,
+            "initial_capital": initial_capital,
+            "final_capital": backtest_engine.current_capital,
+            "total_trades": result.total_trades,
+            "winning_trades": result.winning_trades,
+            "losing_trades": result.losing_trades,
+            "win_rate": round(result.win_rate, 2),
+            "total_pnl": round(result.total_pnl, 2),
+            "profit_factor": round(result.profit_factor, 2),
+            "max_drawdown": round(result.max_drawdown, 2),
+            "sharpe_ratio": round(result.sharpe_ratio, 2),
+            "max_consecutive_wins": result.max_consecutive_wins,
+            "max_consecutive_losses": result.max_consecutive_losses,
+            "avg_win": round(result.avg_win, 2),
+            "avg_loss": round(result.avg_loss, 2),
+            "largest_win": round(result.largest_win, 2),
+            "largest_loss": round(result.largest_loss, 2),
+            "trades": result.trades[:20]  # Return first 20 trades
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Backtest error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== ADVANCED STRATEGIES ENDPOINTS ==========
+
+@api_router.get("/strategies/breakout/{symbol}")
+async def detect_breakout(symbol: str, interval: str = "1h", lookback: int = 20):
+    """Detect price breakout patterns."""
+    try:
+        klines = await market_data_client.get_klines(symbol, interval, lookback + 1)
+        price_data = await market_data_client.get_price(symbol)
+        current_price = float(price_data["price"])
+        
+        breakout = advanced_strategies.detect_breakout(klines, current_price, lookback)
+        
+        return {"symbol": symbol, "breakout_analysis": breakout}
+    except Exception as e:
+        logger.error(f"Breakout detection error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/strategies/volume/{symbol}")
+async def analyze_volume(symbol: str, interval: str = "1h", lookback: int = 20):
+    """Analyze volume patterns."""
+    try:
+        klines = await market_data_client.get_klines(symbol, interval, lookback)
+        
+        volume_analysis = advanced_strategies.analyze_volume(klines, lookback)
+        
+        return {"symbol": symbol, "volume_analysis": volume_analysis}
+    except Exception as e:
+        logger.error(f"Volume analysis error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/strategies/news/{symbol}")
+async def check_news_events(symbol: str):
+    """Check for major news events."""
+    try:
+        news_check = await advanced_strategies.check_news_events(symbol)
+        
+        return {"symbol": symbol, "news_analysis": news_check}
+    except Exception as e:
+        logger.error(f"News check error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/strategies/consolidation/{symbol}")
+async def detect_consolidation(symbol: str, interval: str = "1h", lookback: int = 20):
+    """Detect price consolidation."""
+    try:
+        klines = await market_data_client.get_klines(symbol, interval, lookback)
+        
+        consolidation = advanced_strategies.detect_consolidation(klines, lookback)
+        
+        return {"symbol": symbol, "consolidation_analysis": consolidation}
+    except Exception as e:
+        logger.error(f"Consolidation detection error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 app.include_router(api_router)
