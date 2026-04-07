@@ -173,10 +173,21 @@ async def analyze_signal(symbol: str, interval: str = "1h"):
 async def execute_trade(trade_req: TradeRequest):
     """Execute a manual trade."""
     try:
-        daily_trades = await db.trades.find({}, {"_id": 0}).to_list(1000)
+        from datetime import timedelta
+        start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        daily_trades = await db.trades.find(
+            {"timestamp": {"$gte": start_of_day.isoformat()}},
+            {"_id": 0, "pnl": 1, "timestamp": 1}
+        ).limit(1000).to_list(1000)
+        
         daily_pnl = sum(t.get("pnl", 0) for t in daily_trades if t.get("pnl"))
         
-        recent_trades = sorted(daily_trades, key=lambda x: x.get("timestamp", ""), reverse=True)[:10]
+        recent_trades = await db.trades.find(
+            {},
+            {"_id": 0, "pnl": 1}
+        ).sort("timestamp", -1).limit(10).to_list(10)
+        
         consecutive_losses = 0
         for t in recent_trades:
             if t.get("pnl", 0) < 0:
@@ -219,7 +230,10 @@ async def execute_trade(trade_req: TradeRequest):
 async def get_trades(limit: int = 100):
     """Get trade history."""
     try:
-        trades = await db.trades.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+        trades = await db.trades.find(
+            {},
+            {"_id": 0, "symbol": 1, "side": 1, "order_type": 1, "quantity": 1, "price": 1, "total_value": 1, "status": 1, "timestamp": 1, "pnl": 1, "strategy": 1}
+        ).sort("timestamp", -1).limit(min(limit, 100)).to_list(min(limit, 100))
         
         for trade in trades:
             if isinstance(trade.get("timestamp"), str):
@@ -272,7 +286,24 @@ async def create_position(pos_req: PositionRequest):
 async def get_positions():
     """Get all open positions."""
     try:
-        positions = await db.positions.find({}, {"_id": 0}).to_list(1000)
+        import asyncio
+        
+        positions = await db.positions.find(
+            {},
+            {"_id": 0, "id": 1, "symbol": 1, "side": 1, "entry_price": 1, "quantity": 1, "stop_loss": 1, "take_profit": 1, "opened_at": 1, "updated_at": 1, "current_price": 1, "unrealized_pnl": 1}
+        ).limit(100).to_list(100)
+        
+        unique_symbols = list(set(pos["symbol"] for pos in positions))
+        
+        async def fetch_price(symbol):
+            try:
+                price_data = await market_data_client.get_price(symbol)
+                return symbol, float(price_data["price"])
+            except:
+                return symbol, None
+        
+        price_results = await asyncio.gather(*[fetch_price(sym) for sym in unique_symbols])
+        price_map = dict(price_results)
         
         updated_positions = []
         for pos in positions:
@@ -281,10 +312,8 @@ async def get_positions():
             if isinstance(pos.get("updated_at"), str):
                 pos["updated_at"] = datetime.fromisoformat(pos["updated_at"])
             
-            try:
-                price_data = await market_data_client.get_price(pos["symbol"])
-                current_price = float(price_data["price"])
-                
+            current_price = price_map.get(pos["symbol"])
+            if current_price:
                 if pos["side"] == "LONG":
                     unrealized_pnl = (current_price - pos["entry_price"]) * pos["quantity"]
                 else:
@@ -292,10 +321,8 @@ async def get_positions():
                 
                 pos["current_price"] = current_price
                 pos["unrealized_pnl"] = round(unrealized_pnl, 2)
-                
-                updated_positions.append(pos)
-            except:
-                updated_positions.append(pos)
+            
+            updated_positions.append(pos)
         
         return {"positions": updated_positions, "count": len(updated_positions)}
     except Exception as e:
@@ -324,24 +351,44 @@ async def close_position(position_id: str):
 async def get_dashboard_stats():
     """Get dashboard statistics."""
     try:
-        trades = await db.trades.find({}, {"_id": 0}).to_list(1000)
-        positions = await db.positions.find({}, {"_id": 0}).to_list(1000)
+        trade_stats = await db.trades.aggregate([
+            {
+                "$group": {
+                    "_id": None,
+                    "total": {"$sum": 1},
+                    "winning": {
+                        "$sum": {
+                            "$cond": [{"$gt": ["$pnl", 0]}, 1, 0]
+                        }
+                    },
+                    "total_pnl": {"$sum": "$pnl"}
+                }
+            }
+        ]).to_list(1)
         
-        total_trades = len(trades)
-        winning_trades = len([t for t in trades if t.get("pnl", 0) > 0])
-        total_pnl = sum(t.get("pnl", 0) for t in trades if t.get("pnl"))
+        position_stats = await db.positions.aggregate([
+            {
+                "$group": {
+                    "_id": None,
+                    "count": {"$sum": 1},
+                    "total_unrealized_pnl": {"$sum": "$unrealized_pnl"}
+                }
+            }
+        ]).to_list(1)
         
+        trade_data = trade_stats[0] if trade_stats else {"total": 0, "winning": 0, "total_pnl": 0}
+        position_data = position_stats[0] if position_stats else {"count": 0, "total_unrealized_pnl": 0}
+        
+        total_trades = trade_data.get("total", 0)
+        winning_trades = trade_data.get("winning", 0)
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-        
-        open_positions_count = len(positions)
-        total_unrealized_pnl = sum(p.get("unrealized_pnl", 0) for p in positions)
         
         return {
             "total_trades": total_trades,
             "win_rate": round(win_rate, 2),
-            "total_pnl": round(total_pnl, 2),
-            "open_positions": open_positions_count,
-            "unrealized_pnl": round(total_unrealized_pnl, 2)
+            "total_pnl": round(trade_data.get("total_pnl", 0), 2),
+            "open_positions": position_data.get("count", 0),
+            "unrealized_pnl": round(position_data.get("total_unrealized_pnl", 0), 2)
         }
     except Exception as e:
         logger.error(f"Error fetching dashboard stats: {e}")
@@ -355,7 +402,10 @@ async def analyze_performance():
         if not ai_analyzer:
             return {"analysis": "AI analysis not enabled", "ai_enabled": False}
         
-        trades = await db.trades.find({}, {"_id": 0}).to_list(100)
+        trades = await db.trades.find(
+            {},
+            {"_id": 0, "pnl": 1, "symbol": 1, "side": 1, "timestamp": 1}
+        ).sort("timestamp", -1).limit(100).to_list(100)
         
         analysis = await ai_analyzer.analyze_trade_pattern(trades)
         
