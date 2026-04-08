@@ -1,0 +1,5 @@
+[deploy]
+startCommand = "npm start"
+buildCommand = "npm run build"
+
+[providers.node]
